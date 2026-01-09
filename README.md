@@ -80,6 +80,13 @@ echo "Rapport financier" > sandbox/budget.doc
 
 ```
 
+Ou utiliser le script de creation de sandbox : 
+
+```bash
+chmod +x setup_sandbox.sh
+./setup_sandbox.sh
+```
+
 ### 2. Démarrer le Serveur C2
 
 Dans un terminal séparé, lancez le serveur pour écouter les connexions (Port 4444) :
