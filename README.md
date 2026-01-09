@@ -44,15 +44,15 @@ Le programme est conçu pour opérer **uniquement** dans un dossier cible nommé
 
 ### Structure des fichiers
 Assurez-vous d'avoir les fichiers sources suivants :
-* `ransomware_complet.c` (Programme principal)
-* `server_c2.c` (Serveur C2)
+* `ransomware.c` (Programme principal)
+* `c2_server.c` (Serveur C2)
 * Modules : `scanner.c`, `xor_crypto.c`, `c2_client.c`, etc. (et leurs headers `.h`).
 
 ### Compilation
 
 1. **Compiler le Serveur C2 :**
 ```bash
-gcc server_c2.c -o server_c2 -pthread
+gcc c2_server.c -o server -pthread
 
 ```
 
@@ -84,7 +84,7 @@ echo "Rapport financier" > sandbox/budget.doc
 Dans un terminal séparé, lancez le serveur pour écouter les connexions (Port 4444) :
 
 ```bash
-./server_c2
+./server
 
 ```
 
@@ -92,25 +92,44 @@ Dans un terminal séparé, lancez le serveur pour écouter les connexions (Port 
 
 Le programme s'utilise en ligne de commande avec des arguments :
 
+<img width="1121" height="194" alt="Screenshot from 2026-01-09 16-34-29" src="https://github.com/user-attachments/assets/d3ffe35e-2551-40e0-aaff-44d9c22763e0" />
+
+
 #### A. Tester la connexion C2
 
 Vérifie si le malware peut "appeler la maison" avant d'attaquer.
 
 ```bash
-./ransomware_complet c2_test
+./ransomware c2_test
 
 ```
+<img width="671" height="267" alt="Screenshot from 2026-01-09 16-38-47" src="https://github.com/user-attachments/assets/5ee999f7-7a4b-4d35-93f8-d8e4559b3a96" />
+
 
 *Résultat attendu : Connexion établie, échange de messages STATUS et ENCRYPT.*
+
+Cote serveur : 
+
+<img width="655" height="237" alt="Screenshot from 2026-01-09 16-38-55" src="https://github.com/user-attachments/assets/aefdbe98-7234-44dd-b654-ac86a2036e21" />
+
 
 #### B. Lancer l'attaque (Chiffrement)
 
 Chiffre le contenu du dossier `sandbox`.
 
 ```bash
-./ransomware_complet encrypt
+./ransomware encrypt
 
 ```
+
+<img width="961" height="918" alt="Screenshot from 2026-01-09 16-36-00" src="https://github.com/user-attachments/assets/c66cbbdd-1352-4e8c-b855-be1091fe2e1c" />
+
+<img width="707" height="369" alt="Screenshot from 2026-01-09 16-36-10" src="https://github.com/user-attachments/assets/c7071543-a646-48ef-bbe7-0a8a4e549c52" />
+
+<img width="703" height="431" alt="Screenshot from 2026-01-09 16-37-03" src="https://github.com/user-attachments/assets/253ba9b7-e3c4-4d78-b310-d3b2bebbaa5f" />
+
+<img width="523" height="1308" alt="Screenshot from 2026-01-09 16-37-36" src="https://github.com/user-attachments/assets/f11cd030-d55c-43ae-a3c0-50bf77181d39" />
+
 
 *Action : Les fichiers deviennent `.locked`, la note de rançon apparaît.*
 
@@ -119,9 +138,12 @@ Chiffre le contenu du dossier `sandbox`.
 Tente de déchiffrer les fichiers.
 
 ```bash
-./ransomware_complet decrypt
+./ransomware decrypt
 
 ```
+
+<img width="690" height="1308" alt="Screenshot from 2026-01-09 16-37-58" src="https://github.com/user-attachments/assets/bdd461fc-b0c8-46b6-9950-48f18d51fc59" />
+
 
 *La clé par défaut (Hardcoded) est : `MALWARE2026`.*
 
