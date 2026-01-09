@@ -172,4 +172,3 @@ Tente de déchiffrer les fichiers.
 
 *Projet réalisé dans le cadre du TP - Jour 5.*
 
-```
